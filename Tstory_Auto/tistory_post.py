@@ -1,23 +1,55 @@
-import time, pyperclip, config
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
+import time
 
-driver = webdriver.Chrome()
-# 카카오 로그인 페이지 접속
-driver.get("https://accounts.kakao.com/login/?continue=https%3A%2F%2Fwww.tistory.com%2Fauth%2Flogin")
-time.sleep(2)
+from playwright.sync_api import sync_playwright
 
-# 아이디/비번 복사 붙여넣기 (보안 우회)
-def paste_text(element_name, text):
-    pyperclip.copy(text)
-    driver.find_element(By.NAME, element_name).send_keys(Keys.CONTROL, 'v')
-    time.sleep(1)
+import config
 
-paste_text("loginId", config.USER_ID)
-paste_text("password", config.USER_PW)
-driver.find_element(By.CLASS_NAME, "btn_g.highlight.submit").click()
+def post_tistory():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context(storage_state="auth.json") #
+        page = context.new_page()
 
-# 로그인 완료 대기 후 글쓰기 페이지 이동
-time.sleep(5) 
-driver.get(config.BLOG_URL)
+        page.goto(config.BLOG_URL) 
+        time.sleep(10) # 로딩 대기
+
+        try:
+            # 1. 카테고리 선택 (전과 동일)
+            page.click("i.mce-txt:has-text('카테고리')")
+            time.sleep(2)
+            page.click("span.mce-text:has-text('- 생활정보')")
+            time.sleep(2)
+
+            # 2. 제목 한 글자씩 입력 (delay: 밀리초 단위, 100ms = 0.1초)
+            page.click("#post-title-inp")
+            page.type("#post-title-inp", "한 글자씩 타이핑하는 테스트 제목입니다.", delay=150)
+            time.sleep(2)
+
+            # 3. 본문 한 글자씩 입력 (iframe 내부)
+            editor_frame = page.frame_locator("#editor-tistory_ifr")
+            editor_frame.locator("#tinymce").click()
+            time.sleep(1)
+            # 본문도 0.1초 간격으로 타이핑
+            editor_frame.locator("#tinymce").type("이 내용은 사람이 직접 입력하는 것처럼 천천히 작성되고 있습니다.", delay=100)
+            time.sleep(3)
+
+            # 4. 태그 한 글자씩 입력
+            page.click("#tagText")
+            page.type("#tagText", "파이썬,자동화,타이핑테스트", delay=120)
+            page.keyboard.press("Enter")
+            time.sleep(2)
+
+            # 5. 비공개 저장 프로세스
+            page.click("#publish-layer-btn")
+            time.sleep(3)
+            page.click("#publish-btn")
+            print("한 글자씩 입력하여 비공개 저장 완료!")
+
+        except Exception as e:
+            print(f"오류 발생: {e}")
+
+        time.sleep(5)
+        browser.close()
+
+if __name__ == "__main__":
+    post_tistory()
